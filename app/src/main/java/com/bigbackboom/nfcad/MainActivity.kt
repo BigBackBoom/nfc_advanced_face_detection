@@ -11,7 +11,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.rememberNavController
+import com.bigbackboom.nfcad.home.HomeRoute
+import com.bigbackboom.nfcad.home.addHomeScreen
 import com.bigbackboom.nfcad.ui.theme.NfcAdvancedFaceDetectionTheme
+import com.pay.nfc.ui.mynainfo.MynaInfoRoute
+import com.pay.nfc.ui.mynainfo.addMynaInfoScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -23,6 +29,18 @@ class MainActivity : ComponentActivity() {
                     Greeting(
                         name = "Android", modifier = Modifier.padding(innerPadding)
                     )
+                }
+
+                val navController = rememberNavController()
+                NavHost(navController = navController, startDestination = HomeRoute) {
+                    addHomeScreen(
+                        goToMyNumber = {
+                            navController.navigate(MynaInfoRoute)
+                        }
+                    )
+                    addMynaInfoScreen {
+                        navController.popBackStack()
+                    }
                 }
             }
         }
