@@ -1,10 +1,13 @@
 package com.pay.nfc.ui.mynainfo
 
+import android.graphics.Bitmap
 import android.nfc.NfcAdapter
 import android.nfc.Tag
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -26,6 +29,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.KeyboardType
@@ -35,15 +39,17 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.bigbackboom.nfc.myna.Reader
 import com.bigbackboom.nfc.myna.TextAP
+import com.gemalto.jp2.JP2Decoder
 import com.pay.nfc.util.LogAssistance
 import java.io.IOException
+import androidx.core.graphics.createBitmap
 
 @Composable
 fun MynaInfoScreen(onBackClick: () -> Unit) {
     MynaInfoContent(onBackClick)
 }
 
-fun getNfcCallback(pin: String, logAssistance: LogAssistance) = object : NfcAdapter.ReaderCallback {
+fun getNfcCallback(pin: String, logAssistance: LogAssistance, update: (Bitmap) -> Unit) = object : NfcAdapter.ReaderCallback {
     override fun onTagDiscovered(tag: Tag?) {
         logAssistance.putLogMessage("onTagDiscovered() $tag")
         if (tag == null) return
@@ -55,7 +61,7 @@ fun getNfcCallback(pin: String, logAssistance: LogAssistance) = object : NfcAdap
             logAssistance.putLogMessage("Failed to connect $e")
             return
         }
-        onConnect(pin, reader, logAssistance)
+        onConnect(pin, reader, logAssistance, update)
         try {
             logAssistance.putLogMessage("reader close...")
             reader.close()
@@ -72,6 +78,7 @@ private fun MynaInfoContent(onBackClick: () -> Unit) {
     val nfcAdapter = NfcAdapter.getDefaultAdapter(context)
     val logAssistance = LogAssistance()
     var pin by remember { mutableStateOf<String>("") }
+    var bmp by remember { mutableStateOf<Bitmap?>(null) }
 
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
         try {
@@ -99,7 +106,10 @@ private fun MynaInfoContent(onBackClick: () -> Unit) {
 
     ) { paddingValues ->
         val logList = logAssistance.logList.collectAsState().value
-        val callback = getNfcCallback(pin, logAssistance)
+        val callback = getNfcCallback(pin, logAssistance) {
+            bmp = it
+            logAssistance.putLogMessage("Image updated")
+        }
         val state = rememberScrollState()
         var isListening by remember { mutableStateOf(false) }
         val focusManager = LocalFocusManager.current
@@ -139,27 +149,34 @@ private fun MynaInfoContent(onBackClick: () -> Unit) {
                 logList.forEach {
                     Text(it)
                 }
+
+                Image(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    bitmap = bmp?.asImageBitmap() ?: createBitmap(1, 1).asImageBitmap(),
+                    contentDescription = "MyNumber Card Image"
+                )
             }
         }
     }
 }
 
-private fun onConnect(pin: String, reader: Reader, logAssistance: LogAssistance) {
+private fun onConnect(pin: String, reader: Reader, logAssistance: LogAssistance, update: (Bitmap) -> Unit) {
     try {
-        procedure(pin, reader, logAssistance)
+        procedure(pin, reader, logAssistance, update)
     } catch (e: Exception) {
         logAssistance.putLogMessage("error connection $e")
     }
 }
 
-private fun procedure(pin: String, reader: Reader, logAssistance: LogAssistance): Result {
+private fun procedure(pin: String, reader: Reader, logAssistance: LogAssistance, update: (Bitmap) -> Unit): Result {
     if (pin.length != 4) {
         return Result(ResultStatus.ERROR_INSUFFICIENT_PIN)
     }
 
     // select ap
     val textAP = reader.selectTextAp()
-    val VisualAp =
 
     // remaining pin count
     val count = textAP.lookupPin()
@@ -182,6 +199,23 @@ private fun procedure(pin: String, reader: Reader, logAssistance: LogAssistance)
     val name = attributes?.name
     val dob = attributes?.birth
     logAssistance.putLogMessage("$name, $dob")
+
+    // select visual ap
+    val visualAp = reader.selectVisualAp()
+
+    // remaining pin count
+    val vCount = visualAp.lookupPinA()
+    logAssistance.putLogMessage("VisualAP remaining count $vCount")
+
+    if(!visualAp.verifyPinA(myNumber)) {
+        logAssistance.putLogMessage("verifyPin failed")
+        return Result(ResultStatus.ERROR_INCORRECT_PIN, count - 1)
+    }
+
+    val visualAttr = visualAp.getVisualInfo()
+    val bmp = JP2Decoder(visualAttr?.photo).decode()
+    update(bmp)
+
     return Result(ResultStatus.SUCCESS, count, myNumber, attributes)
 }
 

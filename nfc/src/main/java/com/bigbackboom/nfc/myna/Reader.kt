@@ -23,10 +23,10 @@ class Reader(nfcTag: Tag, val logAssistance: Logger? = null) {
         isoDep.close()
     }
 
-    fun selectTextAp(): TextAP {
-        logAssistance?.putLogMessage("select selectTextAp df D3921000310001010402")
+    fun selectVisualAp(): VisualAp {
+        logAssistance?.putLogMessage("select selectVisualAp df D3921000310001010402")
         selectDF("D3921000310001010402".hexToByteArray())
-        return TextAP(this)
+        return VisualAp(this)
     }
 
     fun selectTextAp(): TextAP {

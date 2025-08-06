@@ -62,6 +62,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.core)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.devnied.emvnfccard)
+    implementation(libs.jpforandroid)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
