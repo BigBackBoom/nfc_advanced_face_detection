@@ -1,6 +1,10 @@
 package com.bigbackboom.nfcad.mynainfo
 
+import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
+import android.net.Uri
 import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.util.Log
@@ -38,22 +42,32 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.createBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.bigbackboom.nfc.myna.Reader
 import com.bigbackboom.nfc.myna.TextAP
+import com.bigbackboom.nfcad.util.AppActivityResultContracts
+import com.bigbackboom.nfcad.util.FaceMatcher
 import com.gemalto.jp2.JP2Decoder
 import com.pay.nfc.util.LogAssistance
 import java.io.IOException
-import androidx.core.graphics.createBitmap
-import com.bigbackboom.nfcad.util.AppActivityResultContracts
+import androidx.core.graphics.scale
+import com.bigbackboom.nfcad.util.FaceMatcherYN
+import org.opencv.R
 
 @Composable
 fun MynaInfoScreen(onBackClick: () -> Unit) {
     MynaInfoContent(onBackClick)
 }
 
-fun getNfcCallback(pin: String, logAssistance: LogAssistance, update: (Bitmap) -> Unit) = object : NfcAdapter.ReaderCallback {
+fun getNfcCallback(
+    context: Context,
+    pin: String,
+    logAssistance: LogAssistance,
+    path: Uri?,
+    update: (Bitmap) -> Unit
+) = object : NfcAdapter.ReaderCallback {
     override fun onTagDiscovered(tag: Tag?) {
         logAssistance.putLogMessage("onTagDiscovered() $tag")
         if (tag == null) return
@@ -65,7 +79,7 @@ fun getNfcCallback(pin: String, logAssistance: LogAssistance, update: (Bitmap) -
             logAssistance.putLogMessage("Failed to connect $e")
             return
         }
-        onConnect(pin, reader, logAssistance, update)
+        onConnect(context, pin, reader, path, logAssistance, update)
         try {
             logAssistance.putLogMessage("reader close...")
             reader.close()
@@ -83,6 +97,7 @@ private fun MynaInfoContent(onBackClick: () -> Unit) {
     val logAssistance = LogAssistance()
     var pin by remember { mutableStateOf<String>("") }
     var bmp by remember { mutableStateOf<Bitmap?>(null) }
+    var path by remember { mutableStateOf<Uri?>(null) }
 
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
         try {
@@ -110,15 +125,16 @@ private fun MynaInfoContent(onBackClick: () -> Unit) {
 
     ) { paddingValues ->
         val logList = logAssistance.logList.collectAsState().value
-        val callback = getNfcCallback(pin, logAssistance) {
+        val callback = getNfcCallback(context, pin, logAssistance, path) {
             bmp = it
             logAssistance.putLogMessage("Image updated")
         }
         val state = rememberScrollState()
         val pickImage = rememberLauncherForActivityResult(
             AppActivityResultContracts.PickImage()
-        ){
+        ) {
             Log.d("MynaInfoScreen", "Image picked: $it")
+            path = it
         }
         var isListening by remember { mutableStateOf(false) }
         val focusManager = LocalFocusManager.current
@@ -181,15 +197,29 @@ private fun MynaInfoContent(onBackClick: () -> Unit) {
     }
 }
 
-private fun onConnect(pin: String, reader: Reader, logAssistance: LogAssistance, update: (Bitmap) -> Unit) {
+private fun onConnect(
+    context: Context,
+    pin: String,
+    reader: Reader,
+    path: Uri?,
+    logAssistance: LogAssistance,
+    update: (Bitmap) -> Unit
+) {
     try {
-        procedure(pin, reader, logAssistance, update)
+        procedure(context, pin, reader, logAssistance, path, update)
     } catch (e: Exception) {
         logAssistance.putLogMessage("error connection $e")
     }
 }
 
-private fun procedure(pin: String, reader: Reader, logAssistance: LogAssistance, update: (Bitmap) -> Unit): Result {
+private fun procedure(
+    context: Context,
+    pin: String,
+    reader: Reader,
+    logAssistance: LogAssistance,
+    path: Uri?,
+    update: (Bitmap) -> Unit
+): Result {
     if (pin.length != 4) {
         return Result(ResultStatus.ERROR_INSUFFICIENT_PIN)
     }
@@ -226,16 +256,42 @@ private fun procedure(pin: String, reader: Reader, logAssistance: LogAssistance,
     val vCount = visualAp.lookupPinA()
     logAssistance.putLogMessage("VisualAP remaining count $vCount")
 
-    if(!visualAp.verifyPinA(myNumber)) {
+    if (!visualAp.verifyPinA(myNumber)) {
         logAssistance.putLogMessage("verifyPin failed")
-        return Result(ResultStatus.ERROR_INCORRECT_PIN, count - 1)
+        return Result(ResultStatus.ERROR_INCORRECT_PIN, vCount - 1)
     }
 
     val visualAttr = visualAp.getVisualInfo()
     val bmp = JP2Decoder(visualAttr?.photo).decode()
-    update(bmp)
 
-    return Result(ResultStatus.SUCCESS, count, myNumber, attributes)
+    context.contentResolver.openInputStream(path!!)?.use {
+        try {
+            val temp = BitmapFactory.decodeStream(it)
+
+            val scale = if (temp.width > temp.height) {
+                1024.0 / temp.width.toFloat()
+            } else {
+                1024.0 / temp.height.toFloat()
+            }
+
+            val sourceBitmap = temp.scale((temp.width * scale).toInt(), (temp.height * scale).toInt())
+
+            val f = FaceMatcherYN(context)
+            val f2 = FaceMatcherYN(context)
+            val featureOriginal = f.detectFace(context,bmp)
+            val featureTarget = f2.detectFace(context,sourceBitmap)
+
+            val result = f.match(featureOriginal!!, featureTarget!!)
+
+            logAssistance.putLogMessage("Similarity: ${result.score}")
+            update(result.targetMat)
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    return Result(ResultStatus.SUCCESS, 1, "144865516900", TextAP.Attributes("", "", "", ""))
 }
 
 data class Result(
