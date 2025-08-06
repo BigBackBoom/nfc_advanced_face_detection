@@ -1,4 +1,4 @@
-package com.pay.nfc.ui.mynainfo
+package com.bigbackboom.nfcad.mynainfo
 
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable

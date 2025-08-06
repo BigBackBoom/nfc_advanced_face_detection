@@ -1,4 +1,4 @@
-package com.pay.nfc.ui.mynainfo
+package com.bigbackboom.nfcad.mynainfo
 
 import android.graphics.Bitmap
 import android.nfc.NfcAdapter
