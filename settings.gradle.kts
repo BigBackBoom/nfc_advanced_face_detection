@@ -22,3 +22,4 @@ dependencyResolutionManagement {
 rootProject.name = "nfc_advanced_face_detection"
 include(":app")
 include(":nfc")
+include(":opencv")
