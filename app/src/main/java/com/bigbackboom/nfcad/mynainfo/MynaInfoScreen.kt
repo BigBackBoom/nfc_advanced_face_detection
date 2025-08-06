@@ -3,6 +3,9 @@ package com.bigbackboom.nfcad.mynainfo
 import android.graphics.Bitmap
 import android.nfc.NfcAdapter
 import android.nfc.Tag
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.launch
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -43,6 +46,7 @@ import com.gemalto.jp2.JP2Decoder
 import com.pay.nfc.util.LogAssistance
 import java.io.IOException
 import androidx.core.graphics.createBitmap
+import com.bigbackboom.nfcad.util.AppActivityResultContracts
 
 @Composable
 fun MynaInfoScreen(onBackClick: () -> Unit) {
@@ -111,6 +115,11 @@ private fun MynaInfoContent(onBackClick: () -> Unit) {
             logAssistance.putLogMessage("Image updated")
         }
         val state = rememberScrollState()
+        val pickImage = rememberLauncherForActivityResult(
+            AppActivityResultContracts.PickImage()
+        ){
+            Log.d("MynaInfoScreen", "Image picked: $it")
+        }
         var isListening by remember { mutableStateOf(false) }
         val focusManager = LocalFocusManager.current
         Column(modifier = Modifier.padding(paddingValues)) {
@@ -144,6 +153,16 @@ private fun MynaInfoContent(onBackClick: () -> Unit) {
                     ) {
                         Text("Start")
                     }
+                }
+                Button(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    onClick = {
+                        pickImage.launch()
+                    }
+                ) {
+                    Text("Select Image")
                 }
 
                 logList.forEach {

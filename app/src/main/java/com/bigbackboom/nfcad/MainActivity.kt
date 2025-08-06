@@ -15,9 +15,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import com.bigbackboom.nfcad.home.HomeRoute
 import com.bigbackboom.nfcad.home.addHomeScreen
+import com.bigbackboom.nfcad.mynainfo.MynaInfoRoute
+import com.bigbackboom.nfcad.mynainfo.addMynaInfoScreen
 import com.bigbackboom.nfcad.ui.theme.NfcAdvancedFaceDetectionTheme
-import com.pay.nfc.ui.mynainfo.MynaInfoRoute
-import com.pay.nfc.ui.mynainfo.addMynaInfoScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,8 +36,7 @@ class MainActivity : ComponentActivity() {
                     addHomeScreen(
                         goToMyNumber = {
                             navController.navigate(MynaInfoRoute)
-                        }
-                    )
+                        })
                     addMynaInfoScreen {
                         navController.popBackStack()
                     }
